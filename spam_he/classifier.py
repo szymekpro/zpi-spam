@@ -197,4 +197,23 @@ def evaluate(classifier: TrainedClassifier, texts, labels) -> dict:
 
 
 def stratified_sample(labels: pd.Series, size: int, seed: int) -> np.ndarray:
-    raise NotImplementedError
+    """Wylosuj pozycje SMS-ów, zachowując w przybliżeniu proporcje klas."""
+    if size < 1 or len(labels) == 0:
+        raise ValueError("Próbka i zbiór testowy muszą być niepuste")
+    size = min(size, len(labels))
+    ham = np.flatnonzero(labels.to_numpy() == "ham")
+    spam = np.flatnonzero(labels.to_numpy() == "spam")
+    spam_count = round(size * len(spam) / len(labels))
+    if size >= 2 and len(ham) > 0 and len(spam) > 0:
+        spam_count = max(1, min(spam_count, size - 1))
+    spam_count = min(spam_count, len(spam))
+    ham_count = min(size - spam_count, len(ham))
+    spam_count = size - ham_count
+
+    rng = np.random.default_rng(seed)
+    positions = np.concatenate([
+        rng.choice(ham, ham_count, replace=False),
+        rng.choice(spam, spam_count, replace=False),
+    ])
+    rng.shuffle(positions)
+    return positions

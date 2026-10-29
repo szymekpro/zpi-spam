@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from spam_he import classifier, homomorphic
+from spam_he import classifier, homomorphic, reporting
 from spam_he.config import Config
 
 
@@ -111,14 +111,22 @@ def main() -> None:
     weights, priors = homomorphic.encode_model(trained, config)
     client = homomorphic.Client(trained, config)
     server = homomorphic.Server(weights, priors)
-    messages = split.test_texts.iloc[:config.n_crypto_samples]
-    print(f"Etap III: klasyfikacja {len(messages)} SMS na danych zaszyfrowanych "
+    print(f"Etapy III-IV: klasyfikacja i porównanie do {config.n_crypto_samples} SMS "
           f"(klucz {config.key_bits} bitów)")
-    for index, message in enumerate(messages, start=1):
-        result = homomorphic.classify_encrypted(client, server, message)
-        print(f"  SMS {index}: ham={result.scores[0]:.6f}, spam={result.scores[1]:.6f}, "
-              f"decyzja klienta: {result.label}")
-    print("Etap III zakończony poprawnie.")
+    comparison = homomorphic.compare_on_sample(client, server, trained, split, config)
+    results = {
+        "key_bits": config.key_bits,
+        "feature_count": len(trained.vectorizer.get_feature_names_out()),
+        "seed": config.seed,
+        "plain_metrics": plain_metrics,
+        "summary": homomorphic.summarize_comparison(comparison),
+        "comparison": comparison,
+    }
+    results["checks"] = reporting.requirement_checks(results, config)
+    reporting.write_outputs(results, config)
+    print()
+    print(reporting.render_report(results))
+    print(f"Wyniki zapisano w: {config.output_dir.resolve()}")
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from phe import paillier
 
-from spam_he.classifier import LABELS, DataSplit, TrainedClassifier, class_index
+from spam_he.classifier import LABELS, DataSplit, TrainedClassifier, class_index, stratified_sample
 from spam_he.config import Config
 
 
@@ -161,8 +161,39 @@ def classify_encrypted(client: Client, server: Server, message: str) -> Encrypte
 def compare_on_sample(
     client: Client, server: Server, classifier: TrainedClassifier, split: DataSplit, config: Config
 ) -> pd.DataFrame:
-    raise NotImplementedError
+    positions = stratified_sample(split.test_labels, config.n_crypto_samples, config.seed)
+    rows = []
+    for position in positions:
+        message = split.test_texts.iloc[position]
+        started = time.perf_counter()
+        plain_label = classifier.predict([message])[0]
+        plain_time = time.perf_counter() - started
+        result = classify_encrypted(client, server, message)
+        rows.append({
+            "test_position": int(position),
+            "actual": split.test_labels.iloc[position],
+            "plain": plain_label,
+            "encrypted": result.label,
+            "agree": plain_label == result.label,
+            "plain_s": plain_time,
+            **{name + "_s": value for name, value in result.times.items()},
+            "encrypted_total_s": sum(result.times.values()),
+        })
+        print(f"  SMS {len(rows)}/{len(positions)}: jawnie={plain_label}, "
+              f"szyfrowane={result.label}, zgodność={'TAK' if plain_label == result.label else 'NIE'}")
+    return pd.DataFrame(rows)
 
 
 def summarize_comparison(comparison: pd.DataFrame) -> dict:
-    raise NotImplementedError
+    if comparison.empty:
+        raise ValueError("Brak wyników do porównania")
+    time_columns = ["plain_s", "vectorize_s", "encrypt_s", "classify_s", "decrypt_s", "encrypted_total_s"]
+    return {
+        "sample_count": len(comparison),
+        "class_counts": {label: int((comparison["actual"] == label).sum()) for label in LABELS},
+        "agreement": float((comparison["plain"] == comparison["encrypted"]).mean()),
+        "disagreements": int((comparison["plain"] != comparison["encrypted"]).sum()),
+        "plain_accuracy": float((comparison["plain"] == comparison["actual"]).mean()),
+        "encrypted_accuracy": float((comparison["encrypted"] == comparison["actual"]).mean()),
+        "mean_times_s": {name: float(comparison[name].mean()) for name in time_columns},
+    }

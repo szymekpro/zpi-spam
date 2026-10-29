@@ -1,0 +1,33 @@
+Etap IV - testy i porównanie
+Klucz: 2048 bitów, cechy TF-IDF: 200, ziarno losowania: 42
+Próbka: 20 SMS (ham: 17, spam: 3)
+
+Model jawny - cały zbiór testowy:
+Accuracy: 94.40%, Precision (spam): 73.25%, Recall (spam): 87.79%, F1 (spam): 0.7986
+Macierz pomyłek (wiersze: rzeczywiste, kolumny: przewidziane; ham, spam): [[862, 42], [16, 115]]
+
+Zgodność decyzji na próbce: 100.00%, rozbieżności: 0
+Accuracy na próbce: jawnie 90.00%, szyfrowane 90.00%
+
+Średni czas dla jednego SMS:
+  Wariant jawny łącznie: 0.658 ms
+  TF-IDF w wariancie szyfrowanym: 0.355 ms
+  Szyfrowanie: 1967.293 ms
+  Klasyfikacja na serwerze: 108.005 ms
+  Odszyfrowanie i decyzja klienta: 5.036 ms
+  Wariant szyfrowany łącznie: 2080.689 ms
+Czasy łączne obejmują TF-IDF i decyzję; pomiar lokalny bez treningu, generowania kluczy i transmisji sieciowej.
+
+Weryfikacja:
+  Recall spamu na całym teście >= 90%: NIE
+  Zgodność decyzji na próbce >= 95%: TAK
+  Wariant szyfrowany trwa dłużej niż jawny: TAK
+  Hipoteza badawcza potwierdzona na tej próbce: TAK
+
+Ograniczenia:
+- Mała próbka nie pozwala uogólnić wyników na wszystkie SMS-y.
+- Ograniczony słownik TF-IDF może pogarszać skuteczność modelu.
+- Zaokrąglenia stałoprzecinkowe mogą zmienić decyzję blisko progu.
+- Czasy zależą od sprzętu, liczby cech i długości klucza.
+- Paillier obsługuje dodawanie i mnożenie przez jawne wagi; decyzję podejmuje klient.
+- Zakładamy uczciwe wykonywanie obliczeń przez serwer; klucz prywatny ma tylko klient.

@@ -21,8 +21,8 @@ python run_experiment.py [opcje]
 | `--quick` | szybki przebieg próbny (klucz 1024 bity, 3 SMS; do demonstracji) | |
 | `--samples N` | liczba SMS w eksperymencie szyfrowanym | |
 | `--key-bits N` | długość klucza Pailliera w bitach | |
-| `--output DIR` | katalog na wyniki | not implemented |
-| bez opcji | etapy I–III: trening, szyfrowanie, klasyfikacja na serwerze i decyzja klienta (domyślnie 20 SMS, klucz 2048 bitów) | |
+| `--output DIR` | katalog na wyniki (domyślnie `wyniki`) | |
+| bez opcji | etapy I–IV: trening, szyfrowanie, klasyfikacja i porównanie wyników oraz czasów (domyślnie 20 SMS, klucz 2048 bitów) | |
 
 ## Przykłady
 
