@@ -1,11 +1,12 @@
 import json
+import time
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 from phe import paillier
 
-from spam_he.classifier import DataSplit, TrainedClassifier
+from spam_he.classifier import LABELS, DataSplit, TrainedClassifier, class_index
 from spam_he.config import Config
 
 
@@ -33,13 +34,27 @@ def from_fixed_point(values, scale: int) -> np.ndarray:
 
 
 def encode_model(classifier: TrainedClassifier, config: Config) -> tuple[np.ndarray, np.ndarray]:
-    raise NotImplementedError
+    """Encode weights at weight_scale and priors at the dot-product scale.
+
+    Scores always follow LABELS (ham, spam), regardless of model.classes_.
+    Python integers avoid overflow in numpy's fixed-width integer arithmetic.
+    """
+    indices = [class_index(classifier.model, label) for label in LABELS]
+    weights = np.asarray([
+        to_fixed_point(classifier.model.feature_log_prob_[index], config.weight_scale)
+        for index in indices
+    ], dtype=object)
+    priors = np.asarray(to_fixed_point(
+        classifier.model.class_log_prior_[indices], config.feature_scale * config.weight_scale
+    ), dtype=object)
+    return weights, priors
 
 
 class Client:
     def __init__(self, classifier: TrainedClassifier, config: Config):
         self.vectorizer = classifier.vectorizer
         self.config = config
+        self.threshold = classifier.threshold
         self.public_key, self._private_key = generate_keypair(config.key_bits)
 
     def vectorize(self, message: str) -> np.ndarray:
@@ -73,26 +88,74 @@ class Client:
         return from_fixed_point(values, self.config.feature_scale)
 
     def decide(self, response: str) -> tuple[str, np.ndarray]:
-        raise NotImplementedError
+        """Decrypt class scores and apply the same margin threshold as the plain model."""
+        payload = json.loads(response)
+        if int(payload["public_key"]["n"]) != self.public_key.n:
+            raise ValueError("Odpowiedź zaszyfrowana innym kluczem")
+        if len(payload["scores"]) != len(LABELS):
+            raise ValueError("Oczekiwano dwóch wyników: ham i spam")
+        values = [
+            self._private_key.decrypt(paillier.EncryptedNumber(self.public_key, int(text), 0))
+            for text in payload["scores"]
+        ]
+        scores = from_fixed_point(values, self.config.feature_scale * self.config.weight_scale)
+        label = "spam" if scores[1] - scores[0] >= self.threshold else "ham"
+        return label, scores
 
 
 class Server:
     def __init__(self, weights: np.ndarray, priors: np.ndarray):
-        raise NotImplementedError
+        """Keep only the encoded public model; the private key stays with Client."""
+        self.weights = np.asarray(weights, dtype=object)
+        self.priors = np.asarray(priors, dtype=object)
+        if (self.weights.ndim != 2 or self.weights.shape[0] != len(LABELS)
+                or self.priors.shape != (len(LABELS),)):
+            raise ValueError("Model musi zawierać wagi i priory dla ham i spam")
 
     def handle(self, request: str) -> str:
-        raise NotImplementedError
+        """Compute E(prior_c + sum(x_i * weight_ci)) without decrypting features."""
+        payload = json.loads(request)
+        public_key = paillier.PaillierPublicKey(int(payload["public_key"]["n"]))
+        if len(payload["features"]) != self.weights.shape[1]:
+            raise ValueError("Liczba cech nie zgadza się z modelem")
+        features = [
+            paillier.EncryptedNumber(public_key, int(text), 0)
+            for text in payload["features"]
+        ]
+        scores = []
+        for weights, prior in zip(self.weights, self.priors):
+            score = public_key.encrypt(int(prior))
+            for feature, weight in zip(features, weights):
+                score += feature * int(weight)
+            # ciphertext() re-randomizes the result before sending it to the client.
+            scores.append(str(score.ciphertext()))
+        return json.dumps({"public_key": {"n": str(public_key.n)}, "scores": scores})
 
 
 @dataclass
 class EncryptedResult:
     label: str
+    scores: np.ndarray
     times: dict[str, float]
-    score_error: float
 
 
 def classify_encrypted(client: Client, server: Server, message: str) -> EncryptedResult:
-    raise NotImplementedError
+    """Run one client -> server -> client exchange using serialized ciphertexts."""
+    started = time.perf_counter()
+    features = client.vectorize(message)
+    vectorized = time.perf_counter()
+    request = client.encrypt(features)
+    encrypted = time.perf_counter()
+    response = server.handle(request)
+    classified = time.perf_counter()
+    label, scores = client.decide(response)
+    decrypted = time.perf_counter()
+    return EncryptedResult(label, scores, {
+        "vectorize": vectorized - started,
+        "encrypt": encrypted - vectorized,
+        "classify": classified - encrypted,
+        "decrypt": decrypted - classified,
+    })
 
 
 def compare_on_sample(

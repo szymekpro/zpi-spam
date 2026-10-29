@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from spam_he import classifier, homomorphic, reporting
+from spam_he import classifier, homomorphic
 from spam_he.config import Config
 
 
@@ -83,7 +83,8 @@ def run_encryption_demo(trained: classifier.TrainedClassifier, split: classifier
 def main() -> None:
     args = parse_args()
     config = build_config(args)
-    config.output_dir.mkdir(parents=True, exist_ok=True)
+    if config.n_crypto_samples < 1:
+        raise ValueError("Liczba SMS musi być dodatnia")
 
     dataset = classifier.load_dataset(classifier.obtain_dataset(config))
     print(f"Oryginał: {dataset.raw_count} SMS, po usunięciu duplikatów: {len(dataset.messages)}")
@@ -110,19 +111,14 @@ def main() -> None:
     weights, priors = homomorphic.encode_model(trained, config)
     client = homomorphic.Client(trained, config)
     server = homomorphic.Server(weights, priors)
-    comparison = homomorphic.compare_on_sample(client, server, trained, split, config)
-
-    results = {
-        "dataset_original_count": dataset.raw_count,
-        "dataset_after_dedup": len(dataset.messages),
-        "class_counts": dataset.messages["label"].value_counts().to_dict(),
-        "alpha_selected": trained.alpha,
-        "threshold_selected": trained.threshold,
-        "plain_test_metrics": plain_metrics,
-        "encrypted": homomorphic.summarize_comparison(comparison),
-    }
-    reporting.write_outputs(results, config)
-    print(f"Wyniki zapisane w katalogu {config.output_dir}/")
+    messages = split.test_texts.iloc[:config.n_crypto_samples]
+    print(f"Etap III: klasyfikacja {len(messages)} SMS na danych zaszyfrowanych "
+          f"(klucz {config.key_bits} bitów)")
+    for index, message in enumerate(messages, start=1):
+        result = homomorphic.classify_encrypted(client, server, message)
+        print(f"  SMS {index}: ham={result.scores[0]:.6f}, spam={result.scores[1]:.6f}, "
+              f"decyzja klienta: {result.label}")
+    print("Etap III zakończony poprawnie.")
 
 
 if __name__ == "__main__":
