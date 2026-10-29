@@ -1,6 +1,9 @@
 import argparse
+import time
 from dataclasses import replace
 from pathlib import Path
+
+import numpy as np
 
 from spam_he import classifier, homomorphic, reporting
 from spam_he.config import Config
@@ -20,6 +23,8 @@ def parse_args() -> argparse.Namespace:
                       help="tylko preprocessing: dane, podział, TF-IDF")
     stop.add_argument("--plain-only", action="store_true",
                       help="tylko część jawna: preprocessing, trening i ocena Naive Bayes")
+    stop.add_argument("--encrypt-only", action="store_true",
+                      help="tylko etap II: klucze Pailliera i szyfrowanie wektorów cech klienta")
     return parser.parse_args()
 
 
@@ -47,6 +52,34 @@ def print_plain_evaluation(trained: classifier.TrainedClassifier, metrics: dict,
     print(f"  Recall spamu >= {config.target_recall:.0%}: {'TAK' if met else 'NIE'}")
 
 
+def run_encryption_demo(trained: classifier.TrainedClassifier, split: classifier.DataSplit,
+                        config: Config) -> None:
+    print(f"Klient: generowanie pary kluczy Pailliera ({config.key_bits} bitów)")
+    started = time.perf_counter()
+    client = homomorphic.Client(trained, config)
+    print(f"  czas generowania kluczy: {time.perf_counter() - started:.3f} s")
+
+    messages = split.test_texts.iloc[:config.n_crypto_samples]
+    print(f"Klient: TF-IDF i szyfrowanie {len(messages)} SMS (skala stałoprzecinkowa {config.feature_scale})")
+    max_error = 0.0
+    for index, message in enumerate(messages, start=1):
+        started = time.perf_counter()
+        features = client.vectorize(message)
+        vectorize_time = time.perf_counter() - started
+        started = time.perf_counter()
+        request = client.encrypt(features)
+        encrypt_time = time.perf_counter() - started
+        error = float(np.abs(client.decrypt_features(request) - features).max())
+        max_error = max(max_error, error)
+        print(f"  SMS {index}: cechy={len(features)}, niezerowe={int(np.count_nonzero(features))}, "
+              f"TF-IDF {vectorize_time * 1000:.1f} ms, szyfrowanie {encrypt_time:.2f} s, "
+              f"rozmiar zapytania {len(request) / 1024:.0f} KiB, błąd kodowania {error:.2e}")
+    limit = 0.5 / config.feature_scale
+    print(f"Maksymalny błąd kodowania stałoprzecinkowego: {max_error:.2e} (dopuszczalny {limit:.2e})")
+    if max_error > limit + 1e-15:
+        raise RuntimeError("Błąd kodowania przekracza dopuszczalny")
+
+
 def main() -> None:
     args = parse_args()
     config = build_config(args)
@@ -68,6 +101,10 @@ def main() -> None:
     print_plain_evaluation(trained, plain_metrics, config)
     if args.plain_only:
         print("Część jawna zakończona poprawnie.")
+        return
+    if args.encrypt_only:
+        run_encryption_demo(trained, split, config)
+        print("Etap II zakończony poprawnie.")
         return
 
     weights, priors = homomorphic.encode_model(trained, config)
