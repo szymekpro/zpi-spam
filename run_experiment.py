@@ -151,6 +151,7 @@ def main() -> None:
         "key_bits": config.key_bits,
         "feature_count": len(trained.vectorizer.get_feature_names_out()),
         "seed": config.seed,
+        "class_counts": dataset.messages["label"].value_counts().to_dict(),
         "plain_metrics": plain_metrics,
         "summary": homomorphic.summarize_comparison(comparison),
         "comparison": comparison,

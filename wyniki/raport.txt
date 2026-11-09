@@ -1,25 +1,25 @@
 Etap IV - testy i porównanie
-Klucz: 2048 bitów, cechy TF-IDF: 200, ziarno losowania: 42
+Klucz: 2048 bitów, cechy TF-IDF: 300, ziarno losowania: 42
 Próbka: 20 SMS (ham: 17, spam: 3)
 
 Model jawny - cały zbiór testowy:
-Accuracy: 94.40%, Precision (spam): 73.25%, Recall (spam): 87.79%, F1 (spam): 0.7986
-Macierz pomyłek (wiersze: rzeczywiste, kolumny: przewidziane; ham, spam): [[862, 42], [16, 115]]
+Accuracy: 96.23%, Precision (spam): 80.67%, Recall (spam): 92.37%, F1 (spam): 0.8612
+Macierz pomyłek (wiersze: rzeczywiste, kolumny: przewidziane; ham, spam): [[875, 29], [10, 121]]
 
 Zgodność decyzji na próbce: 100.00%, rozbieżności: 0
-Accuracy na próbce: jawnie 90.00%, szyfrowane 90.00%
+Accuracy na próbce: jawnie 95.00%, szyfrowane 95.00%
 
 Średni czas dla jednego SMS:
-  Wariant jawny łącznie: 0.658 ms
-  TF-IDF w wariancie szyfrowanym: 0.355 ms
-  Szyfrowanie: 1967.293 ms
-  Klasyfikacja na serwerze: 108.005 ms
-  Odszyfrowanie i decyzja klienta: 5.036 ms
-  Wariant szyfrowany łącznie: 2080.689 ms
+  Wariant jawny łącznie: 0.867 ms
+  TF-IDF w wariancie szyfrowanym: 0.415 ms
+  Szyfrowanie: 3520.438 ms
+  Klasyfikacja na serwerze: 182.135 ms
+  Odszyfrowanie i decyzja klienta: 6.803 ms
+  Wariant szyfrowany łącznie: 3709.791 ms
 Czasy łączne obejmują TF-IDF i decyzję; pomiar lokalny bez treningu, generowania kluczy i transmisji sieciowej.
 
 Weryfikacja:
-  Recall spamu na całym teście >= 90%: NIE
+  Recall spamu na całym teście >= 90%: TAK
   Zgodność decyzji na próbce >= 95%: TAK
   Wariant szyfrowany trwa dłużej niż jawny: TAK
   Hipoteza badawcza potwierdzona na tej próbce: TAK

@@ -1,20 +1,70 @@
 from pathlib import Path
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import pandas as pd
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer
 
 from spam_he.config import Config
 
 
+LABELS = ("ham", "spam")
+TIME_LABELS = {
+    "plain_s": "Jawny",
+    "vectorize_s": "TF-IDF",
+    "encrypt_s": "Szyfrowanie",
+    "classify_s": "Klasyfikacja",
+    "decrypt_s": "Odszyfrowanie",
+    "encrypted_total_s": "Szyfrowany",
+}
+
+
 def plot_class_distribution(class_counts: pd.Series, path: Path) -> None:
-    raise NotImplementedError
+    fig, ax = plt.subplots(figsize=(5, 3.5))
+    ax.bar(class_counts.index, class_counts.values, color=["tab:blue", "tab:red"])
+    for x, value in enumerate(class_counts.values):
+        ax.text(x, value, str(value), ha="center", va="bottom")
+    ax.set_title("Rozkład klas w zbiorze")
+    ax.set_ylabel("Liczba SMS")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
 
 
 def plot_confusion_matrix(matrix: list[list[int]], path: Path) -> None:
-    raise NotImplementedError
+    fig, ax = plt.subplots(figsize=(4, 3.5))
+    ax.imshow(matrix, cmap="Blues")
+    for i, row in enumerate(matrix):
+        for j, value in enumerate(row):
+            color = "white" if value > max(map(max, matrix)) / 2 else "black"
+            ax.text(j, i, str(value), ha="center", va="center", color=color)
+    ax.set_xticks([0, 1], LABELS)
+    ax.set_yticks([0, 1], LABELS)
+    ax.set_xlabel("Przewidziana")
+    ax.set_ylabel("Rzeczywista")
+    ax.set_title("Macierz pomyłek (model jawny)")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
 
 
 def plot_times(mean_times: dict[str, float], path: Path) -> None:
-    raise NotImplementedError
+    names = [TIME_LABELS[key] for key in TIME_LABELS]
+    values = [mean_times[key] * 1000 for key in TIME_LABELS]
+    fig, ax = plt.subplots(figsize=(6, 3.5))
+    ax.bar(names, values, color="tab:green")
+    ax.set_yscale("log")
+    ax.set_ylabel("Średni czas na SMS [ms]")
+    ax.set_title("Czas wariantu jawnego i szyfrowanego")
+    ax.tick_params(axis="x", rotation=30)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
 
 
 def requirement_checks(results: dict, config: Config) -> list[dict]:
@@ -85,11 +135,34 @@ def render_report(results: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def markdown_to_pdf(markdown: str, path: Path) -> Path:
-    raise NotImplementedError
+def markdown_to_pdf(markdown: str, path: Path, images: list[Path] = ()) -> Path:
+    font = Path(matplotlib.get_data_path()) / "fonts" / "ttf" / "DejaVuSans.ttf"
+    pdfmetrics.registerFont(TTFont("DejaVuSans", str(font)))
+    styles = getSampleStyleSheet()
+    for style in styles.byName.values():
+        style.fontName = "DejaVuSans"
+    story = []
+    for line in markdown.splitlines():
+        if line.startswith("# "):
+            story.append(Paragraph(line[2:], styles["Heading1"]))
+        elif line.strip():
+            story.append(Paragraph(line.replace("&", "&amp;").replace("<", "&lt;"), styles["Normal"]))
+        else:
+            story.append(Spacer(1, 0.3 * cm))
+    for image in images:
+        story.append(Image(str(image), width=12 * cm, height=7 * cm, kind="proportional"))
+    SimpleDocTemplate(str(path)).build(story)
+    return path
 
 
 def write_outputs(results: dict, config: Config) -> None:
-    config.output_dir.mkdir(parents=True, exist_ok=True)
-    results["comparison"].to_csv(config.output_dir / "porownanie.csv", index=False)
-    (config.output_dir / "raport.txt").write_text(render_report(results), encoding="utf-8")
+    out = config.output_dir
+    out.mkdir(parents=True, exist_ok=True)
+    results["comparison"].to_csv(out / "porownanie.csv", index=False)
+    report = render_report(results)
+    (out / "raport.txt").write_text(report, encoding="utf-8")
+    images = [out / "rozklad_klas.png", out / "macierz_pomylek.png", out / "czasy.png"]
+    plot_class_distribution(pd.Series(results["class_counts"]), images[0])
+    plot_confusion_matrix(results["plain_metrics"]["confusion_matrix"], images[1])
+    plot_times(results["summary"]["mean_times_s"], images[2])
+    markdown_to_pdf("# " + report, out / "raport.pdf", images)

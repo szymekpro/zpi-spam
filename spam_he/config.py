@@ -16,7 +16,7 @@ class Config:
 
     test_size: float = 0.20
     validation_size: float = 0.20
-    max_features: int = 200
+    max_features: int = 300
     alpha_grid: tuple[float, ...] = (0.01, 0.05, 0.1, 0.5, 1.0)
 
     target_recall: float = 0.90

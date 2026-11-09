@@ -74,6 +74,7 @@ class ComparisonTests(unittest.TestCase):
             config = Config(output_dir=Path(directory) / "wyniki")
             results = {
                 "key_bits": 2048, "feature_count": 200, "seed": 42,
+                "class_counts": {"ham": 9, "spam": 10},
                 "plain_metrics": {"accuracy": 0.9, "precision_spam": 0.9,
                                   "recall_spam": 0.91, "f1_spam": 0.9,
                                   "confusion_matrix": [[8, 1], [1, 9]]},
@@ -86,6 +87,8 @@ class ComparisonTests(unittest.TestCase):
             report = (config.output_dir / "raport.txt").read_text(encoding="utf-8")
             self.assertIn("Hipoteza badawcza potwierdzona na tej próbce: NIE", report)
             self.assertIn("Ograniczenia:", report)
+            for name in ("raport.pdf", "rozklad_klas.png", "macierz_pomylek.png", "czasy.png"):
+                self.assertTrue((config.output_dir / name).exists())
 
     def test_hypothesis_requires_agreement_and_increased_time(self):
         for agreement, encrypted_time, expected in [(0.95, 2.0, True), (0.949, 2.0, False),
