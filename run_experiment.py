@@ -1,4 +1,5 @@
 import argparse
+import json
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -80,6 +81,34 @@ def run_encryption_demo(trained: classifier.TrainedClassifier, split: classifier
         raise RuntimeError("Błąd kodowania przekracza dopuszczalny")
 
 
+def short(ciphertext: str, width: int = 24) -> str:
+    return f"{ciphertext[:width]}... ({len(ciphertext)} cyfr)"
+
+
+def print_exchange_demo(client: homomorphic.Client, server: homomorphic.Server,
+                        trained: classifier.TrainedClassifier, message: str) -> None:
+    """Pokaz jednej wymiany klient -> serwer -> klient (Etap III)."""
+    print("Demonstracja wymiany dla jednego SMS:")
+    print(f"  Klient: treść SMS (nie opuszcza klienta): {message[:60]!r}")
+    request = client.encrypt(client.vectorize(message))
+    features = json.loads(request)["features"]
+    print(f"  Klient -> serwer: {len(features)} szyfrogramów, np. {short(features[0])}, "
+          f"{len(request) / 1024:.0f} KiB")
+    print(f"  Serwer: posiada klucz prywatny: {'TAK' if hasattr(server, '_private_key') else 'NIE'}; "
+          f"oblicza E(prior + sum(x_i * w_i)) dla ham i spam")
+    response = server.handle(request)
+    scores_ct = json.loads(response)["scores"]
+    print(f"  Serwer -> klient: {len(scores_ct)} szyfrogramy: ham {short(scores_ct[0])}, "
+          f"spam {short(scores_ct[1])}")
+    label, scores = client.decide(response)
+    margin = scores[1] - scores[0]
+    plain_margin = float(trained.margins([message])[0])
+    print(f"  Klient: odszyfrowane wyniki ham={scores[0]:.6f}, spam={scores[1]:.6f}, "
+          f"margines={margin:.6f} (próg {client.threshold:.6f}) -> {label}")
+    print(f"  Model jawny: margines={plain_margin:.6f} -> {trained.predict([message])[0]}, "
+          f"różnica {abs(margin - plain_margin):.2e}")
+
+
 def main() -> None:
     args = parse_args()
     config = build_config(args)
@@ -109,8 +138,12 @@ def main() -> None:
         return
 
     weights, priors = homomorphic.encode_model(trained, config)
+    started = time.perf_counter()
     client = homomorphic.Client(trained, config)
+    print(f"Klient: klucze Pailliera ({config.key_bits} bitów) wygenerowane w "
+          f"{time.perf_counter() - started:.2f} s")
     server = homomorphic.Server(weights, priors)
+    print_exchange_demo(client, server, trained, split.test_texts.iloc[0])
     print(f"Etapy III-IV: klasyfikacja i porównanie do {config.n_crypto_samples} SMS "
           f"(klucz {config.key_bits} bitów)")
     comparison = homomorphic.compare_on_sample(client, server, trained, split, config)
