@@ -11,16 +11,16 @@ from spam_he.config import Config
 
 
 def generate_keypair(key_bits: int) -> tuple[paillier.PaillierPublicKey, paillier.PaillierPrivateKey]:
-    """Generate a Paillier key pair with a modulus of `key_bits` bits."""
+    """Wygeneruj parę kluczy Paillier o module o długości `key_bits` bitów."""
     return paillier.generate_paillier_keypair(n_length=key_bits)
 
 
 def to_fixed_point(values, scale: int) -> list[int]:
-    """Encode floats as integers `round(value * scale)`.
+    """Koduj liczby zmiennoprzecinkowe jako całkowite `round(value * scale)`.
 
-    Paillier works on integers modulo n, so floating-point TF-IDF values are
-    mapped to fixed-point integers. Plain Python ints are returned (not numpy
-    scalars), so `phe` encrypts them with exponent 0.
+    Paillier działa na liczbach całkowitych modulo n, dlatego wartości TF-IDF
+    są zamieniane na liczby stałoprzecinkowe. Zwracane są zwykłe liczby całkowite
+    Pythona (nie skalary numpy), dzięki czemu `phe` szyfruje je z wykładnikiem 0.
     """
     array = np.asarray(values, dtype=float)
     if not np.isfinite(array).all():
@@ -29,15 +29,15 @@ def to_fixed_point(values, scale: int) -> list[int]:
 
 
 def from_fixed_point(values, scale: int) -> np.ndarray:
-    """Decode fixed-point integers back to floats (inverse of `to_fixed_point`)."""
+    """Zdekoduj liczby stałoprzecinkowe z powrotem na zmiennoprzecinkowe (odwrotność `to_fixed_point`)."""
     return np.asarray([int(value) for value in values], dtype=float) / scale
 
 
 def encode_model(classifier: TrainedClassifier, config: Config) -> tuple[np.ndarray, np.ndarray]:
-    """Encode weights at weight_scale and priors at the dot-product scale.
+    """Zakoduj wagi w skali weight_scale, a priory w skali iloczynu skalarnego.
 
-    Scores always follow LABELS (ham, spam), regardless of model.classes_.
-    Python integers avoid overflow in numpy's fixed-width integer arithmetic.
+    Wyniki zawsze są zgodne z LABELS (ham, spam), niezależnie od model.classes_.
+    Liczby całkowite Pythona unikają przepełnienia w arytmetyce numpy o stałej szerokości.
     """
     indices = [class_index(classifier.model, label) for label in LABELS]
     weights = np.asarray([
@@ -58,14 +58,14 @@ class Client:
         self.public_key, self._private_key = generate_keypair(config.key_bits)
 
     def vectorize(self, message: str) -> np.ndarray:
-        """Return the dense TF-IDF vector (always one value per feature, zeros included)."""
+        """Zwróć gęsty wektor TF-IDF (zawsze jedna wartość na cechę, łącznie z zerami)."""
         return self.vectorizer.transform([message]).toarray()[0]
 
     def encrypt(self, features: np.ndarray) -> str:
-        """Encrypt every feature with the public key and return a JSON request.
+        """Zaszyfruj każdą cechę kluczem publicznym i zwróć zapytanie w formacie JSON.
 
-        The request contains only the public key modulus and the ciphertexts
-        (decimal strings, implicit exponent 0), nothing in plaintext.
+        Zapytanie zawiera wyłącznie moduł klucza publicznego i szyfrogramy
+        (ciągi dziesiętne, domyślny wykładnik 0), bez żadnych danych jawnych.
         """
         encoded = to_fixed_point(features, self.config.feature_scale)
         ciphertexts = []
@@ -77,7 +77,7 @@ class Client:
         return json.dumps({"public_key": {"n": str(self.public_key.n)}, "features": ciphertexts})
 
     def decrypt_features(self, request: str) -> np.ndarray:
-        """Decrypt a request produced by `encrypt` (used only for self-checks on the client)."""
+        """Odszyfruj zapytanie wygenerowane przez `encrypt` (używane tylko do autotestów po stronie klienta)."""
         payload = json.loads(request)
         if int(payload["public_key"]["n"]) != self.public_key.n:
             raise ValueError("Zapytanie zaszyfrowane innym kluczem")
@@ -88,7 +88,7 @@ class Client:
         return from_fixed_point(values, self.config.feature_scale)
 
     def decide(self, response: str) -> tuple[str, np.ndarray]:
-        """Decrypt class scores and apply the same margin threshold as the plain model."""
+        """Odszyfruj wyniki klas i zastosuj ten sam próg marginesu co model jawny."""
         payload = json.loads(response)
         if int(payload["public_key"]["n"]) != self.public_key.n:
             raise ValueError("Odpowiedź zaszyfrowana innym kluczem")
@@ -105,7 +105,7 @@ class Client:
 
 class Server:
     def __init__(self, weights: np.ndarray, priors: np.ndarray):
-        """Keep only the encoded public model; the private key stays with Client."""
+        """Zachowaj tylko zakodowany model; klucz prywatny pozostaje w Client."""
         self.weights = np.asarray(weights, dtype=object)
         self.priors = np.asarray(priors, dtype=object)
         if (self.weights.ndim != 2 or self.weights.shape[0] != len(LABELS)
@@ -113,7 +113,7 @@ class Server:
             raise ValueError("Model musi zawierać wagi i priory dla ham i spam")
 
     def handle(self, request: str) -> str:
-        """Compute E(prior_c + sum(x_i * weight_ci)) without decrypting features."""
+        """Oblicz E(prior_c + sum(x_i * weight_ci)) bez odszyfrowywania cech."""
         payload = json.loads(request)
         public_key = paillier.PaillierPublicKey(int(payload["public_key"]["n"]))
         if len(payload["features"]) != self.weights.shape[1]:
@@ -140,7 +140,7 @@ class EncryptedResult:
 
 
 def classify_encrypted(client: Client, server: Server, message: str) -> EncryptedResult:
-    """Run one client -> server -> client exchange using serialized ciphertexts."""
+    """Wykonaj jedną wymianę klient -> serwer -> klient z użyciem zserializowanych szyfrogramów."""
     started = time.perf_counter()
     features = client.vectorize(message)
     vectorized = time.perf_counter()
