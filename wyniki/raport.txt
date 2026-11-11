@@ -1,21 +1,21 @@
 Etap IV - testy i porównanie
 Klucz: 2048 bitów, cechy TF-IDF: 300, ziarno losowania: 42
-Próbka: 20 SMS (ham: 17, spam: 3)
+Próbka: 100 SMS (ham: 87, spam: 13)
 
 Model jawny - cały zbiór testowy:
 Accuracy: 96.14%, Precision (spam): 80.13%, Recall (spam): 92.37%, F1 (spam): 0.8582
 Macierz pomyłek (wiersze: rzeczywiste, kolumny: przewidziane; ham, spam): [[874, 30], [10, 121]]
 
 Zgodność decyzji na próbce: 100.00%, rozbieżności: 0
-Accuracy na próbce: jawnie 95.00%, szyfrowane 95.00%
+Accuracy na próbce: jawnie 99.00%, szyfrowane 99.00%
 
 Średni czas dla jednego SMS:
-  Wariant jawny łącznie: 0.560 ms
-  TF-IDF w wariancie szyfrowanym: 0.215 ms
-  Szyfrowanie: 1914.072 ms
-  Klasyfikacja na serwerze: 93.156 ms
-  Odszyfrowanie i decyzja klienta: 3.621 ms
-  Wariant szyfrowany łącznie: 2011.064 ms
+  Wariant jawny łącznie: 0.995 ms
+  TF-IDF w wariancie szyfrowanym: 0.548 ms
+  Szyfrowanie: 4234.745 ms
+  Klasyfikacja na serwerze: 203.064 ms
+  Odszyfrowanie i decyzja klienta: 8.300 ms
+  Wariant szyfrowany łącznie: 4446.657 ms
 Czasy łączne obejmują TF-IDF i decyzję; pomiar lokalny bez treningu, generowania kluczy i transmisji sieciowej.
 
 Weryfikacja:
