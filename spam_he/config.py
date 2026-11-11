@@ -19,6 +19,10 @@ class Config:
     max_features: int = 300
     alpha_grid: tuple[float, ...] = (0.01, 0.05, 0.1, 0.5, 1.0)
 
+    sensitivity_seeds: int = 10
+    feature_sizes: tuple[int, ...] = (100, 200, 300, 500)
+    alpha_values: tuple[float, ...] = (0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0)
+
     target_recall: float = 0.90
     target_agreement: float = 0.95
 

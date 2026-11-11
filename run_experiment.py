@@ -5,8 +5,9 @@ from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
-from spam_he import classifier, homomorphic, reporting
+from spam_he import analysis, classifier, homomorphic, reporting
 from spam_he.config import Config
 
 
@@ -19,7 +20,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--samples", type=int, help="liczba SMS w eksperymencie szyfrowanym")
     parser.add_argument("--key-bits", type=int, help="długość klucza Pailliera w bitach")
     parser.add_argument("--output", type=Path, help="katalog na wyniki")
+    parser.add_argument("--seeds", type=int,
+                        help="liczba podziałów danych w analizie wrażliwości (--sensitivity)")
     stop = parser.add_mutually_exclusive_group()
+    stop.add_argument("--sensitivity", action="store_true",
+                      help="tylko analiza wrażliwości: wpływ liczby słów TF-IDF i parametru alpha")
     stop.add_argument("--preprocess-only", action="store_true",
                       help="tylko preprocessing: dane, podział, TF-IDF")
     stop.add_argument("--plain-only", action="store_true",
@@ -35,6 +40,7 @@ def build_config(args: argparse.Namespace) -> Config:
         "n_crypto_samples": args.samples,
         "key_bits": args.key_bits,
         "output_dir": args.output,
+        "sensitivity_seeds": args.seeds,
     }
     return replace(config, **{name: value for name, value in overrides.items() if value is not None})
 
@@ -81,6 +87,26 @@ def run_encryption_demo(trained: classifier.TrainedClassifier, split: classifier
         raise RuntimeError("Błąd kodowania przekracza dopuszczalny")
 
 
+def print_sensitivity(feature_trials: pd.DataFrame, alpha_trials: pd.DataFrame, config: Config) -> None:
+    seeds = analysis.seeds_for(config)
+    print(f"Analiza wrażliwości: {len(seeds)} podziałów danych (ziarna {seeds[0]}-{seeds[-1]}), "
+          f"średnia ± odchylenie std. na zbiorze testowym")
+    print(f"Liczba słów TF-IDF (alpha z siatki {config.alpha_grid}, dobierane na walidacji):")
+    for line in analysis.summary_lines(feature_trials, "max_features"):
+        print(line)
+    sizes = set(feature_trials["max_features"])
+    if {200, 300} <= sizes:
+        for metric in ("recall_spam", "recall_default", "precision_spam", "f1_spam"):
+            diff = analysis.paired_difference(feature_trials, 200, 300, metric)
+            print(f"  200 -> 300 słów, zmiana {analysis.METRIC_LABELS[metric]}: "
+                  f"{diff['mean']:+.4f} ± {diff['std']:.4f}; lepiej w {diff['better']}, "
+                  f"tak samo w {diff['equal']}, gorzej w {diff['worse']} z {diff['total']} podziałów")
+    print(f"Parametr alpha ({config.max_features} słów, próg dobierany na walidacji pod recall >= "
+          f"{config.target_recall:.2f}):")
+    for line in analysis.summary_lines(alpha_trials, "alpha"):
+        print(line)
+
+
 def short(ciphertext: str, width: int = 24) -> str:
     return f"{ciphertext[:width]}... ({len(ciphertext)} cyfr)"
 
@@ -118,6 +144,13 @@ def main() -> None:
     dataset = classifier.load_dataset(classifier.obtain_dataset(config))
     print(f"Oryginał: {dataset.raw_count} SMS, po usunięciu duplikatów: {len(dataset.messages)}")
     print(dataset.messages["label"].value_counts().to_string())
+    if args.sensitivity:
+        feature_trials = analysis.feature_sensitivity(dataset, config)
+        alpha_trials = analysis.alpha_sensitivity(dataset, config)
+        print_sensitivity(feature_trials, alpha_trials, config)
+        reporting.write_sensitivity_outputs(feature_trials, alpha_trials, config)
+        print(f"Wyniki zapisano w: {config.output_dir.resolve()}")
+        return
     split = classifier.split_dataset(dataset, config)
     print(f"Podział: trening {len(split.train_texts)}, test {len(split.test_texts)}")
     matrix = classifier.build_vectorizer(config).fit_transform(split.train_texts)

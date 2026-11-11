@@ -3,19 +3,19 @@ Klucz: 2048 bitów, cechy TF-IDF: 300, ziarno losowania: 42
 Próbka: 20 SMS (ham: 17, spam: 3)
 
 Model jawny - cały zbiór testowy:
-Accuracy: 96.23%, Precision (spam): 80.67%, Recall (spam): 92.37%, F1 (spam): 0.8612
-Macierz pomyłek (wiersze: rzeczywiste, kolumny: przewidziane; ham, spam): [[875, 29], [10, 121]]
+Accuracy: 96.14%, Precision (spam): 80.13%, Recall (spam): 92.37%, F1 (spam): 0.8582
+Macierz pomyłek (wiersze: rzeczywiste, kolumny: przewidziane; ham, spam): [[874, 30], [10, 121]]
 
 Zgodność decyzji na próbce: 100.00%, rozbieżności: 0
 Accuracy na próbce: jawnie 95.00%, szyfrowane 95.00%
 
 Średni czas dla jednego SMS:
-  Wariant jawny łącznie: 0.867 ms
-  TF-IDF w wariancie szyfrowanym: 0.415 ms
-  Szyfrowanie: 3520.438 ms
-  Klasyfikacja na serwerze: 182.135 ms
-  Odszyfrowanie i decyzja klienta: 6.803 ms
-  Wariant szyfrowany łącznie: 3709.791 ms
+  Wariant jawny łącznie: 0.560 ms
+  TF-IDF w wariancie szyfrowanym: 0.215 ms
+  Szyfrowanie: 1914.072 ms
+  Klasyfikacja na serwerze: 93.156 ms
+  Odszyfrowanie i decyzja klienta: 3.621 ms
+  Wariant szyfrowany łącznie: 2011.064 ms
 Czasy łączne obejmują TF-IDF i decyzję; pomiar lokalny bez treningu, generowania kluczy i transmisji sieciowej.
 
 Weryfikacja:
